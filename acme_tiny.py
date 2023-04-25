@@ -135,9 +135,12 @@ def get_crt(account_key, csr, acme_dir, log=LOGGER, CA=DEFAULT_CA, disable_check
         challenge = [c for c in authorization['challenges'] if c['type'] == "http-01"][0]
         token = re.sub(r"[^A-Za-z0-9_\-]", "_", challenge['token'])
         keyauthorization = "{0}.{1}".format(token, thumbprint)
-        wellknown_path = os.path.join(acme_dir, token)
-        with open(wellknown_path, "w") as wellknown_file:
-            wellknown_file.write(keyauthorization)
+        if callable(acme_dir):
+            wellknown_path = acme_dir(token, keyauthorization)
+        else:
+            wellknown_path = os.path.join(acme_dir, token)
+            with open(wellknown_path, "w") as wellknown_file:
+                wellknown_file.write(keyauthorization)
 
         # check that the file is in place
         try:
@@ -151,7 +154,10 @@ def get_crt(account_key, csr, acme_dir, log=LOGGER, CA=DEFAULT_CA, disable_check
         authorization = _poll_until_not(auth_url, ["pending"], "Error checking challenge status for {0}".format(domain))
         if authorization['status'] != "valid":
             raise ValueError("Challenge did not pass for {0}: {1}".format(domain, authorization))
-        os.remove(wellknown_path)
+        if callable(acme_dir):
+            acme_dir(token, None)
+        else:
+            os.remove(wellknown_path)
         log.info("{0} verified!".format(domain))
 
     # finalize the order with the csr
